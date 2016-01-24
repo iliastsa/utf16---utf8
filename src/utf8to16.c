@@ -1,92 +1,68 @@
 #include <stdio.h>
 
 int main(void){
-	unsigned int temp,temp1,temp2,code,pair1,pair2;
-	int byteCount;
-	int byte1,byte2,byte3,byte4;
-	int flag = 1;
 
-	byte1=getchar();                                            	//Read first byte
-	byte2=getchar();                                            	//Read second byte
-	pair1 = byte1 << 8;                                        	    //Shift first byte 8 bits left and...
-	pair1 = pair1 +  byte2;                                     	//add the second byte to create the first pair.
+	int counter,i,flag,ch1,ch,temp,shiftTemp;
+	unsigned int code,firstSur,secndSur;
+	flag = 1;
+	ch1 = getchar();                                            //Read first byte of each sequence
 
-	if((pair1>=0x0000 && pair1<=0xD7FF))                        	//If the first pair is in [0x0000,0xD7FF]...
-		byteCount = 2;                                          	    //then it's a 2-byte sequence.
-	else if((pair1>=0xD800 && pair1 <= 0xDBFF)){                	//Else if the first pair is in [0xD800,0xDBFF]
-		byte3 = getchar();                                      	    //Read third byte.
-		byte4 = getchar();                                      	    //Read fourth byte.
-		pair2 = (byte3 << 8) +  byte4;                          	    //Create the second pair just like the first.
+	while(ch1 != EOF && flag == 1){                             //While its not EOF...
+		i = 1;
+		counter = 0;
+		temp = 0x80;                                            //Temp is 0x80 , which translates to 1000000 in binary.
 
-		if(pair2>=0xDC00 && pair2<=0xDFFF){                     //If the second pair is in [0xDC00,0xDFFF]...
-			byteCount = 4;                                          //then it's a 4-byte sequence.
+		while((ch1 & temp) != 0){                               //While bitwise and between ch1 and temp is not zero...
+			temp = (temp >> 1);                                     //Shift temp one position to the right.
+			counter++;                                              //Add one to counter
+		}                                                           //Basically this while loop counts how many consecutive "1"s ch1 has at its beginning.
+
+		if(counter == 0)                                        //If counter is zero, then...
+			code = ch1;                                         //The Unicode code point is the same as the UTF encoding.
+		else{
+            	if(counter == 1)                                    	//Else... if counter = 1,
+                	flag = 0;                                       	    //then it's an illegal UTF-8 initial byte. Flag = 0.
+            	else if(counter == 2)                               	//Else if counter = 2,
+                    code = ch1 & 0x1F;                          		    //then set the code point equal to the last 5 bits of ch1.
+            	else if(counter == 3)                               	//Else if counter = 3,
+                    code = ch1 & 0xF;                               		//then set the code point equal to the last 4 bits of ch1.
+		else if(counter == 4)                               	//Else if counter = 3,
+			code = ch1 & 0x7;                               	    //then set the code point equal to the last 3 bits of ch1.
+		else                                                	//In any other case, the first byte is illegal, set flag = 0.
+			flag = 0;
+		ch = getchar();                                     	//Read the next byte.
+
+		if((ch & 0xC0) != 0x80)                         	//If each byte in the sequence after the initial byte is not formatted as: 10xxxxxx then sequence is illegal.
+			flag = 0;
+		while(i<=counter-1 && flag == 1){                   	//While i is less than counter-1(because we exclude the leading byte) and the sequence is legal.
+			code = code << 6;                               	    //Shift code 6 positions to the left...
+			code = code + (ch & 0x3F);                      	    //and add the last 6 bits of the subsequent byte(10xxxxxx).
+			i++;                                            	    //Add one to i.
+			if(i<=counter - 1){                               	    //If i is less than counter-1...
+				ch = getchar();                             		    //read the next subsequent byte
+				if((ch & 0xC0)!= 0x80)                      		    //and perform same check on its format. If not formatted correctly, sequence is illegal and...
+					flag = 0;                                 		        //set flag to zero.
+				}
+			}
 		}
-		else                                                    //If the second pair is not in [0xDC00,0xDFFF], the sequence is illegal...
-			flag = 0;                                      		    //so set flag = 0
+		if(flag != 0){                                                                	//If sequence was legal.
+			if((code>=0x0000 && code<=0xD7FF) || (code>=0xE000 && code<=0xFFFF)){    	//If the Unicode code point is in [0x0000,0xD7FF] or [0xE000,0xFFFF]
+				putchar(code >> 8);                                                 		//Print the first 8 bytes.
+				putchar(code & 0xFF);                                               		//Then the remaining 8.
+			}
+			else if(code>=0x010000 && code<=0x10FFFF){                          	//Else if the Unicode code point is in [0x010000,0x10FFFF]
+				shiftTemp = ((code - 0x010000) >> 10);                                  //Set shiftTemp equal to the first 10 bits of (code - 0x010000).
+				firstSur = (shiftTemp + 0xD800);                                        //First surrogate pair equals shiftTemp + 0xD800
+				secndSur = ((code - 0x010000) & 0x3FF) + 0xDC00;                        //Second surrogate pair equals to the last 10 bits of (code - 0x010000) + 0xDC00
+				putchar(firstSur >> 8);                                                 //Print first surrogate, WITHOUT the first  bits.
+				putchar(firstSur & 0xFF);                                               //Print last 8 bits of first surrogate.
+				putchar(secndSur >> 8);                                                 //Print second surrogate, WITHOUT the first  bits.
+				putchar(secndSur & 0xFF);                                               //Print last 8 bits of second surrogate.
+			}
+		}
+        ch1 = getchar();                                                                //Read the leading byte of the next sequence.
 	}
-	else if(byte1 != EOF)                				        //If the first pair is not in [0xD800,0xDBFF],and is not EOF (EOF is legal) the sequence is illegal...
-		flag = 0;		                                               	//so set flag = 0
-
-
-	while(byte1 != EOF && flag != 0){           			//While first two bytes are not EOF, and the sequence is legal.
-		if(byteCount == 2)                                      //If its a 2-byte sequence...
-			code = pair1;                                  		    //Unicode code point is the same as the sequence.
-		if(byteCount == 4){                                     //If its a 4-byte sequence...
-			temp1 = ((pair1 & 0x3FF)<< 10);               		    //Take the 10 right bits of the first pair and shift them 10 positions to the left,
-			temp2 = (pair2 & 0x3FF);                       		    //take the  and the 10 right bits of the second pair.
-			code = temp1 + temp2 +  0x10000;                	    //Set code equal to the addition of these new bit strings of length 10
-		}
-		if(code>=0x0000 && code<=0x007F){                      	//If code point is in [0x0000,0x007F]
-			putchar(code);                                 		    //print the code as is.
-		}
-		else if(code>=0x0080 && code<=0x07FF){                  //Else if code point is in[0x0080,0x07FF]
-			temp = 0xC0 + ((code & 0x7C0)>>6);                      //set temp equal to 110xxxxx where x are the 5 left most bits of code.
-			putchar(temp);                                          //print temp
-			temp = 0x80 + (code & 0x3F);                            //set temp equalt to 10xxxxxx where x are the 6 right most bits of code.
-			putchar(temp);                                          //printf temp
-		}
-		else if(code>=0x0800 && code<=0xFFFF){                  //Else if code point is in [0x0800,0xFFFF]
-			temp = 0xE0 + ((code & 0xF000)>>12);                    //set temp equal to 1110xxxx where x are the 4 left most bits of code.
-			putchar(temp);                                          //print temp.
-			temp = 0x80 + ((code & 0xFC0)>>6);                      //set temp equal to 10xxxxxx where x are the next 6 bits of code.
-			putchar(temp);                                          //print temp.
-			temp = 0x80 + ((code & 0x3F));                          //set temp equal to 10xxxxxx where x are the 6 left most bits of code.
-			putchar(temp);
-		}
-		else if(code>=0x010000 && code<=0x10FFFF){              //Else if code point is in [0x010000,0x10FFFF]
-			temp = 0xF0 + ((code & 0x1C0000)>>18);                  //set temp equal to 11110xxx where x are the 3 left most bits of code.
-			putchar(temp);                                          //print temp.
-			temp = 0x80 + ((code & 0x3F000)>>12);                   //set temp equal to 10xxxxxx where x are the next 6 bits of code.
-			putchar(temp);                                          //print temp.
-			temp = 0x80 + ((code & 0xFC0)>>6);                      //set temp equal to 10xxxxxx where x are the next 6 bits of code.
-			putchar(temp);                                          //print temp.
-			temp = 0x80 + (code & 0x3F);                            //set temp equal to 10xxxxxx where x are the right most 6 bits of code.
-			putchar(temp);                                          //print temp.
-		}
-		byte1=getchar();                                        	//Read first byte of next sequence.
-		byte2=getchar();                                            	//Read second byte of next sequence.
-		pair1 = byte1 << 8;            	                            	//Shift first byte 8 bits left and...
-		pair1 = pair1 + byte2;		                                //add the second byte to create the first pair.
-
-	if(byte1 != EOF && flag !=0){           			        //If first byte is not EOF, and the sequence is legal.
-		if((pair1>=0x0000 && pair1<=0xD7FF))                	    		//If the first pair is in [0x0000,0xD7FF]...
-                	byteCount = 2;                                  		    //then it's a 2-byte sequence.
-            	else if((pair1>=0xD800 && pair1 <= 0xDBFF)){				//Else if the first pair is in [0xD800,0xDBFF]
-                	byte3 = getchar();							//Read third byte.
-                	byte4 = getchar();							//Read fourth byte.
-                	pair2 = (byte3 << 8) +  byte4;						//Create the second pair just like the first.
-
-                	if(pair2>=0xDC00 && pair2<=0xDFFF)              	        	//If the second pair is in [0xDC00,0xDFFF]...
-                    		byteCount = 4;                              		    		//then it's a 4-byte sequence.
-                	else									//If the second pair is not in [0xDC00,0xDFFF], then sequence is illegal
-                    		flag = 0;                                                   		//so set flag = 0
-            	}
-            	else									//If the first pair is not in [0xDC00,0xDFFF], the sequence is illegal...
-                	flag = 0;                                   				//so set flag = 0
-	}
-    }
-	if(flag == 0)                                                		//If any sequence was illegal then print an error message.
-		printf("Conversion was terminated. Invalid character in input text file.");
-
+	if(flag == 0)                                                                     	//If there was an illegal sequence, output an error message.
+		printf("\n\nConversion was terminated. Invalid character in the provided text file.\n");
 return 0;
 }
